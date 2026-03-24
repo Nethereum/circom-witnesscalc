@@ -217,8 +217,10 @@ jobs:
         include:
           - target: aarch64-linux-android
             rid: android-arm64
+            arch_env: AARCH64_LINUX_ANDROID
           - target: x86_64-linux-android
             rid: android-x64
+            arch_env: X86_64_LINUX_ANDROID
     steps:
       - uses: actions/checkout@v4
 
@@ -239,13 +241,16 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        env:
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
-          export CC="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}34-clang"
-          export CARGO_TARGET_$(echo ${{ matrix.target }} | tr '[:lower:]-' '[:upper:]_')_LINKER=$CC
-          export CLANG_PATH=$CC
+          NDK_ROOT="${ANDROID_NDK_LATEST_HOME}"
+          TOOLCHAIN="${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          SYSROOT="${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+
+          export CC="${TOOLCHAIN}/${{ matrix.target }}34-clang"
+          export CARGO_TARGET_${{ matrix.arch_env }}_LINKER="${CC}"
           export RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=0x4000"
+          export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${SYSROOT}"
+
           cargo build --target ${{ matrix.target }} --release
 
       - name: Collect artifacts
@@ -261,9 +266,58 @@ jobs:
           path: artifacts/${{ matrix.rid }}
           if-no-files-found: error
 
+  build-ios:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-ios
+            rid: ios-arm64
+          - target: aarch64-apple-ios-sim
+            rid: ios-sim-arm64
+          - target: x86_64-apple-ios
+            rid: ios-sim-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: brew install protobuf
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --target ${{ matrix.target }} --release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/${{ matrix.rid }}
+          cp target/${{ matrix.target }}/release/libcircom_witnesscalc.a artifacts/${{ matrix.rid }}/
+          cp target/${{ matrix.target }}/release/libcircom_witnesscalc.dylib artifacts/${{ matrix.rid }}/ 2>/dev/null || true
+          if [ -f "artifacts/${{ matrix.rid }}/libcircom_witnesscalc.dylib" ]; then
+            install_name_tool -id @rpath/libcircom_witnesscalc.dylib artifacts/${{ matrix.rid }}/libcircom_witnesscalc.dylib
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+
   upload-release:
     if: github.event_name == 'release'
-    needs: [build-windows-x86_64, build-linux-x86_64, build-linux-arm64, build-macos-arm64, build-macos-x86_64, build-android]
+    needs: [build-windows-x86_64, build-linux-x86_64, build-linux-arm64, build-macos-arm64, build-macos-x86_64, build-android, build-ios]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
