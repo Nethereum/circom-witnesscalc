@@ -245,9 +245,11 @@ jobs:
           NDK_ROOT="${ANDROID_NDK_LATEST_HOME}"
           TOOLCHAIN="${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
           SYSROOT="${NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          NDK_CLANG="${TOOLCHAIN}/${{ matrix.target }}34-clang"
 
-          export CC="${TOOLCHAIN}/${{ matrix.target }}34-clang"
-          export CARGO_TARGET_${{ matrix.arch_env }}_LINKER="${CC}"
+          export CC="${NDK_CLANG}"
+          export CLANG_PATH="${NDK_CLANG}"
+          export CARGO_TARGET_${{ matrix.arch_env }}_LINKER="${NDK_CLANG}"
           export RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=0x4000"
           export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=${SYSROOT}"
 
