@@ -1,0 +1,288 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+      - build-all-platforms
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build-windows-x86_64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        run: choco install protoc -y
+
+      - name: Install LLVM
+        run: choco install llvm -y
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        env:
+          LIBCLANG_PATH: "C:\\Program Files\\LLVM\\bin"
+        run: cargo build --release
+
+      - name: Build build-circuit
+        env:
+          LIBCLANG_PATH: "C:\\Program Files\\LLVM\\bin"
+        run: cargo build --release -p build-circuit
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts/win-x64
+          cp target/release/circom_witnesscalc.dll artifacts/win-x64/
+          cp target/release/calc-witness.exe artifacts/win-x64/
+          cp target/release/build-circuit.exe artifacts/win-x64/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-win-x64
+          path: artifacts/win-x64
+          if-no-files-found: error
+
+  build-linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Build build-circuit
+        run: cargo build --release -p build-circuit
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/linux-x64
+          cp target/release/libcircom_witnesscalc.so artifacts/linux-x64/
+          cp target/release/calc-witness artifacts/linux-x64/
+          cp target/release/build-circuit artifacts/linux-x64/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-linux-x64
+          path: artifacts/linux-x64
+          if-no-files-found: error
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/linux-arm64
+          cp target/release/libcircom_witnesscalc.so artifacts/linux-arm64/
+          cp target/release/calc-witness artifacts/linux-arm64/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-linux-arm64
+          path: artifacts/linux-arm64
+          if-no-files-found: error
+
+  build-macos-arm64:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: brew install protobuf
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --workspace --release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/osx-arm64
+          cp target/release/libcircom_witnesscalc.dylib artifacts/osx-arm64/
+          cp target/release/libcircom_witnesscalc.a artifacts/osx-arm64/
+          cp target/release/calc-witness artifacts/osx-arm64/
+          cp target/release/build-circuit artifacts/osx-arm64/
+          install_name_tool -id @rpath/libcircom_witnesscalc.dylib artifacts/osx-arm64/libcircom_witnesscalc.dylib
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-osx-arm64
+          path: artifacts/osx-arm64
+          if-no-files-found: error
+
+  build-macos-x86_64:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: brew install protobuf
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/osx-x64
+          cp target/release/libcircom_witnesscalc.dylib artifacts/osx-x64/
+          cp target/release/calc-witness artifacts/osx-x64/
+          install_name_tool -id @rpath/libcircom_witnesscalc.dylib artifacts/osx-x64/libcircom_witnesscalc.dylib
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-osx-x64
+          path: artifacts/osx-x64
+          if-no-files-found: error
+
+  build-android:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            rid: android-arm64
+          - target: x86_64-linux-android
+            rid: android-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          export CC="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.target }}34-clang"
+          export CARGO_TARGET_$(echo ${{ matrix.target }} | tr '[:lower:]-' '[:upper:]_')_LINKER=$CC
+          export CLANG_PATH=$CC
+          export RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=0x4000"
+          cargo build --target ${{ matrix.target }} --release
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts/${{ matrix.rid }}
+          cp target/${{ matrix.target }}/release/libcircom_witnesscalc.so artifacts/${{ matrix.rid }}/
+          cp target/${{ matrix.target }}/release/libcircom_witnesscalc.a artifacts/${{ matrix.rid }}/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: circom-witnesscalc-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}
+          if-no-files-found: error
+
+  upload-release:
+    if: github.event_name == 'release'
+    needs: [build-windows-x86_64, build-linux-x86_64, build-linux-arm64, build-macos-arm64, build-macos-x86_64, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Create release zips
+        run: |
+          cd all-artifacts
+          for dir in */; do
+            name="${dir%/}"
+            zip -r "../${name}-${{ github.ref_name }}.zip" "$dir"
+          done
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for zip in *.zip; do
+            gh release upload ${{ github.event.release.tag_name }} "$zip" -R ${{ github.repository }}
+          done
