@@ -56,8 +56,20 @@ fn prepare_status(status: *mut gw_status_t, code: GW_ERROR_CODE, error_msg: &str
     }
 }
 
+/// Free memory allocated by gw_calc_witness (wtns_data or status.error_msg).
+///
 /// # Safety
-/// 
+///
+/// ptr must have been allocated by this library (via gw_calc_witness), or be null.
+#[no_mangle]
+pub unsafe extern "C" fn gw_free(ptr: *mut c_void) {
+    if !ptr.is_null() {
+        libc::free(ptr);
+    }
+}
+
+/// # Safety
+///
 /// This function is unsafe because it dereferences raw pointers and can cause
 /// undefined behavior if misused.
 #[no_mangle]
